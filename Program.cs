@@ -96,12 +96,12 @@ namespace Romanesco
             {
                 for (int yIdx = -2; yIdx < nY + 2; yIdx++)
                 {
-                    for (int zIdx = -2; zIdx < nZ + 2; zIdx++)
+                    for (int zIdx = -1; zIdx < nZ + 1; zIdx++)
                     {
                         double x = xIdx;
                         double y = yIdx;
                         double z = zIdx * sqrtHalf;
-                        if (zIdx % 2 == 1) // odd z index
+                        if ((zIdx + 2) % 2 == 1) // odd z index
                         {
                             x += 0.5;
                             y += 0.5;
@@ -163,6 +163,10 @@ namespace Romanesco
 
                                     relLatCoords[1 - dim] = 0;
                                     relLatCoords[2] = -sgn * orien * 0.5 * sqrtHalf;
+                                    if (zIdx == 0 && relLatCoords[2] < 0)
+                                    {
+                                        relLatCoords[2] = 0;
+                                    }
                                     coords[0] = latticeScaling * (x + relLatCoords[0]) + offsetX;
                                     coords[1] = latticeScaling * (y + relLatCoords[1]) + offsetY;
                                     coords[2] = latticeScaling * (z + relLatCoords[2]) + offsetZ;
@@ -170,11 +174,14 @@ namespace Romanesco
 
                                     relLatCoords[1 - dim] = 0;
                                     relLatCoords[2] = sgn * orien * 0.5 * sqrtHalf;
+                                    if (zIdx == 0 && relLatCoords[2] < 0)
+                                    {
+                                        relLatCoords[2] = 0;
+                                    }
                                     coords[0] = latticeScaling * (x + relLatCoords[0]) + offsetX;
                                     coords[1] = latticeScaling * (y + relLatCoords[1]) + offsetY;
                                     coords[2] = latticeScaling * (z + relLatCoords[2]) + offsetZ;
                                     stringBuilder.AppendLine("        vertex " + coords[0].ToString() + " " + coords[1].ToString() + " " + coords[2].ToString());
-
 
                                     stringBuilder.AppendLine("    endloop");
                                     stringBuilder.AppendLine("endfacet");
@@ -184,7 +191,7 @@ namespace Romanesco
                         // Check the upwards neighbors in each direction
                         int xShift = 0;
                         int yShift = 0;
-                        if (zIdx % 2 == 1) // odd z index
+                        if ((zIdx + 2) % 2 == 1) // odd z index
                         {
                             xShift = 1;
                             yShift = 1;
@@ -209,7 +216,54 @@ namespace Romanesco
 
                                 if (neighborCellIsOccupied != currentCellIsOccupied)
                                 {
+                                    double[] coords = new double[3];
+                                    double[] relLatCoords = new double[3]; // lattice coords relative to the current cell
+                                    int orien = currentCellIsOccupied ? 1 : -1; // surface orientation
+                                    for (int sgn = -1; sgn <= 1; sgn += 2)
+                                    {
+                                        // Facet normals will be recomputed by the software we use to open the stl file, so it's not critical that they are correct
+                                        stringBuilder.AppendLine("facet normal 0.0 0.0 1.0");
+                                        stringBuilder.AppendLine("    outer loop");
 
+                                        relLatCoords[0] = sgn < 0 ? 0 : 0.5 * xDir;
+                                        relLatCoords[1] = sgn < 0 ? 0 : 0.5 * yDir;
+                                        relLatCoords[2] = sgn < 0 ? sqrtHalf : 0;
+                                        if (zIdx == -1)
+                                        {
+                                            relLatCoords[2] = sqrtHalf;
+                                        }
+                                        coords[0] = latticeScaling * (x + relLatCoords[0]) + offsetX;
+                                        coords[1] = latticeScaling * (y + relLatCoords[1]) + offsetY;
+                                        coords[2] = latticeScaling * (z + relLatCoords[2]) + offsetZ;
+                                        stringBuilder.AppendLine("        vertex " + coords[0].ToString() + " " + coords[1].ToString() + " " + coords[2].ToString());
+
+                                        relLatCoords[0] = ((1 - sgn * xDir * yDir * orien) / 2) * 0.5 * xDir;
+                                        relLatCoords[1] = ((sgn * xDir * yDir * orien + 1) / 2) * 0.5 * yDir;
+                                        relLatCoords[2] = 0.5 * sqrtHalf;
+                                        if (zIdx == -1)
+                                        {
+                                            relLatCoords[2] = sqrtHalf;
+                                        }
+                                        coords[0] = latticeScaling * (x + relLatCoords[0]) + offsetX;
+                                        coords[1] = latticeScaling * (y + relLatCoords[1]) + offsetY;
+                                        coords[2] = latticeScaling * (z + relLatCoords[2]) + offsetZ;
+                                        stringBuilder.AppendLine("        vertex " + coords[0].ToString() + " " + coords[1].ToString() + " " + coords[2].ToString());
+
+                                        relLatCoords[0] = ((sgn * xDir * yDir * orien + 1) / 2) * 0.5 * xDir;
+                                        relLatCoords[1] = ((1 - sgn * xDir * yDir * orien) / 2) * 0.5 * yDir;
+                                        relLatCoords[2] = 0.5 * sqrtHalf;
+                                        if (zIdx == -1)
+                                        {
+                                            relLatCoords[2] = sqrtHalf;
+                                        }
+                                        coords[0] = latticeScaling * (x + relLatCoords[0]) + offsetX;
+                                        coords[1] = latticeScaling * (y + relLatCoords[1]) + offsetY;
+                                        coords[2] = latticeScaling * (z + relLatCoords[2]) + offsetZ;
+                                        stringBuilder.AppendLine("        vertex " + coords[0].ToString() + " " + coords[1].ToString() + " " + coords[2].ToString());
+
+                                        stringBuilder.AppendLine("    endloop");
+                                        stringBuilder.AppendLine("endfacet");
+                                    }
                                 }
                             }
                         }
