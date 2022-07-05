@@ -14,18 +14,18 @@ namespace Romanesco
 
         const double sqrtHalf = 0.70710678118654757; // sqrt(0.5)
         const double latticeScaling = 1.0001; // amount to scale from lattice-index coordinates to world coordinates
-        const double offsetX = -10.001; // Offset to apply to lattice-origin in world coordinates
-        const double offsetY = -10.001;
-        const double offsetZ = -6.499;
+        const double offsetX = -40.001; // Offset to apply to lattice-origin in world coordinates
+        const double offsetY = -40.001;
+        const double offsetZ = -28.499;
 
         const double A = 0.5;
         const double B = 0.01;
         const double C = 1.0 / 6.0;
         const double ScaleFactor = 0.1;
 
-        const int nX = 20;
-        const int nY = 20;
-        const int nZ = 10;
+        const int nX = 80;
+        const int nY = 80;
+        const int nZ = 40;
         static double[,,,] latticePoints;
 
         static void Main(string[] args)
