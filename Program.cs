@@ -276,6 +276,113 @@ namespace Romanesco
             File.WriteAllText(outputFile, stringBuilder.ToString());
         }
 
+        static Matrix<double> LatticeToMatrix()
+        {
+            int nOccupied = 0;
+            for (int xIdx = 0; xIdx < nX; xIdx++)
+            {
+                for (int yIdx = 0; yIdx < nY; yIdx++)
+                {
+                    for (int zIdx = 0; zIdx < nZ; zIdx++)
+                    {
+
+                        if (latticePoints[xIdx, yIdx, zIdx, 0] != 0 ||
+                            latticePoints[xIdx, yIdx, zIdx, 1] != 0 ||
+                            latticePoints[xIdx, yIdx, zIdx, 2] != 0)
+                        {
+                            nOccupied++;
+                        }
+                    }
+                }
+            }
+
+            double[,] array = new double[nOccupied, 3];
+            int index = 0;
+            for (int xIdx = 0; xIdx < nX; xIdx++)
+            {
+                for (int yIdx = 0; yIdx < nY; yIdx++)
+                {
+                    for (int zIdx = 0; zIdx < nZ; zIdx++)
+                    {
+
+                        if (latticePoints[xIdx, yIdx, zIdx, 0] != 0 ||
+                            latticePoints[xIdx, yIdx, zIdx, 1] != 0 ||
+                            latticePoints[xIdx, yIdx, zIdx, 2] != 0)
+                        {
+                            array[index, 0] = latticePoints[xIdx, yIdx, zIdx, 0];
+                            array[index, 1] = latticePoints[xIdx, yIdx, zIdx, 1];
+                            array[index, 2] = latticePoints[xIdx, yIdx, zIdx, 2];
+                            index++;
+                        }
+                    }
+                }
+            }
+
+            return Matrix<double>.Build.DenseOfArray(array);
+        }
+
+        static void WriteMatrixIntoLattice(Matrix<double> matrix)
+        {
+            for (int index = 0; index < matrix.RowCount; index++)
+            {
+                // Reversing the logic used to generate the centers
+                double x = matrix[index, 0];
+                double y = matrix[index, 1];
+                double z = matrix[index, 2];
+                x -= offsetX;
+                y -= offsetY;
+                z -= offsetZ;
+                x /= latticeScaling;
+                y /= latticeScaling;
+                z /= latticeScaling;              
+                int zIdx = (int)Math.Round(z / sqrtHalf);
+                if (zIdx % 2 == 1) // odd z index
+                {
+                    x -= 0.5;
+                    y -= 0.5;
+                }
+                int xIdx = (int)Math.Round(x);
+                int yIdx = (int)Math.Round(y);
+
+                // Correction for incorrect cell assignments (some other center is closer)
+                if (Math.Abs(x - xIdx) + Math.Abs(y - yIdx) + Math.Abs(z - zIdx * sqrtHalf) > 1)
+                {
+                    if (z > zIdx * sqrtHalf)
+                    {
+                        zIdx += 1;
+                    }
+                    else
+                    {
+                        zIdx -= 1;
+                    }
+                    if (zIdx % 2 == 0) // z index becoming even
+                    {
+                        x += 0.5;
+                        y += 0.5;
+                    }
+                    else // z index becoming odd
+                    {
+                        x -= 0.5;
+                        y -= 0.5;
+                    }
+                    xIdx = (int)Math.Round(x);
+                    yIdx = (int)Math.Round(y);
+                }
+
+                if (xIdx >= 0 && xIdx < nX
+                    && yIdx >= 0 && yIdx < nY
+                    && zIdx >= 0 && zIdx < nZ &&
+                    latticePoints[xIdx, yIdx, zIdx, 0] == 0 &&
+                    latticePoints[xIdx, yIdx, zIdx, 1] == 0 &&
+                    latticePoints[xIdx, yIdx, zIdx, 2] == 0) // current lattice cell is unoccupied
+                {
+                    latticePoints[xIdx, yIdx, zIdx, 0] = matrix[index, 0];
+                    latticePoints[xIdx, yIdx, zIdx, 1] = matrix[index, 1];
+                    latticePoints[xIdx, yIdx, zIdx, 2] = matrix[index, 2];
+                }
+            }
+        }
+
         /// <summary>
         /// Matrix that scales by C * e^(B * theta)
         /// </summary>
