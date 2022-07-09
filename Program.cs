@@ -345,7 +345,7 @@ namespace Romanesco
                 int yIdx = (int)Math.Round(y);
 
                 // Correction for incorrect cell assignments (some other center is closer)
-                if (Math.Abs(x - xIdx) + Math.Abs(y - yIdx) + Math.Abs(z - zIdx * sqrtHalf) > 1)
+                if (Math.Abs(x - xIdx) + Math.Abs(y - yIdx) + Math.Abs(z * 2 * sqrtHalf - zIdx) > 1)
                 {
                     if (z > zIdx * sqrtHalf)
                     {
