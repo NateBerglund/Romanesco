@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -10,41 +11,87 @@ namespace Romanesco
 {
     class Program
     {
+        const int iterations = 6;
+
         const string outputFile = "romanesco.stl";
 
         const double sqrtHalf = 0.70710678118654757; // sqrt(0.5)
+
+        const int nX = 256;
+        const int nY = 256;
+        const int nZ = 128;
+
         const double latticeScaling = 1.0001; // amount to scale from lattice-index coordinates to world coordinates
-        const double offsetX = -40.001; // Offset to apply to lattice-origin in world coordinates
-        const double offsetY = -40.001;
-        const double offsetZ = -28.499;
+        const double offsetX = -0.5 * nX; // Offset to apply to lattice-origin in world coordinates
+        const double offsetY = -0.5 * nY;
+        const double offsetZ = -0.7 * nZ;
 
-        const double A = 0.5;
-        const double B = 0.01;
-        const double C = 1.0 / 6.0;
-        const double ScaleFactor = 0.1;
+        const double step = 2 * Math.PI / 13.5;
+        const int stepStartIdx = -12;
+        const int stepEndIdx = 200;
+        const double B = 0.045;
+        const double ScaleFactor = 0.3; // Note: We require that ScaleFactor < sqrt(2/3) ~= 0.816
 
-        const int nX = 80;
-        const int nY = 80;
-        const int nZ = 40;
         static double[,,,] latticePoints;
 
         static void Main(string[] args)
         {
             // Note: fractal equations are modified version(s) of: https://medium.com/@rodrigosetti/the-broccolis-equation-2ed8faaa3f3a
-            Matrix<double> S1 = Matrix<double>.Build.Dense(3, 3, (i, j) => i == j ? ScaleFactor : 0.0);
+            Matrix<double> S1 = Matrix<double>.Build.DenseOfArray(new double[,] {
+                { ScaleFactor,           0,           0, 0 },
+                {           0, ScaleFactor,           0, 0 },
+                {           0,           0, ScaleFactor, 0 },
+                {           0,           0,           0, 1 } });
 
-            // Broccoli = Cone Union S1 * Union_{theta = -100*pi by pi/4 to 100*pi} (S2 * R * T * Broccoli)
+            // Note: we assume ScaleFactor < sqrt(2/3) ~= 0.816
+            double u = (1.0 + Math.Sqrt(4.0 - (6.0 * ScaleFactor * ScaleFactor))) / 3.0;
 
-            //Equation of logarithmic spiral:
-            //cylindrical coords:
-            //r = A * e ^ (B * theta)
-            //z = -slope * r
+            // Base of the first shrunk cone:
+            //   [-u*offsetZ; 0; offsetZ] + ScaleFactor*offsetZ * ([sqrtHalf; 0; -sqrtHalf] * cos(t) + [0; 1; 0] * sin(t))
+            //
+            // New apex of the cone: [-u*offsetZ; 0; offsetZ] + ScaleFactor*(-offsetZ)*[sqrtHalf; 0; sqrtHalf] =
+            //                       [offsetZ*(-u-ScaleFactor*sqrtHalf); 0; offsetZ*(1-ScaleFactor*sqrtHalf)]
 
-            //x = A * e ^ (B * theta) * cos(theta)
-            //y = A * e ^ (B * theta) * sin(theta)
-            //z = A * (e ^ (B * 20 * pi) - 2 * e ^ (B * theta))
+            // Initial 45 degree clockwise (about y-axis) rotation matrix (note the library uses column-major order
+            Matrix<double> R1 = Matrix<double>.Build.DenseOfArray(new double[,] {
+                {  sqrtHalf, 0, sqrtHalf, 0 },
+                {         0, 1,        0, 0 },
+                { -sqrtHalf, 0, sqrtHalf, 0 },
+                {         0, 0,        0, 1 } });
 
+            // Initial translation transform
+            Matrix<double> T1 = Matrix<double>.Build.DenseOfArray(new double[,] {
+                { 1, 0, 0, offsetZ * (-u - ScaleFactor * sqrtHalf) },
+                { 0, 1, 0, 0 },
+                { 0, 0, 1, offsetZ * (1 - ScaleFactor * sqrtHalf) },
+                { 0, 0, 0, 1 } });
+
+            // Level 0: cone
             InitializeLattice();
+            Matrix<double> seedPoints = LatticeToMatrix();
+
+            // Level 1: cone with single spiral, level 2, etc...
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            for (int iter = 0; iter < iterations; iter++)
+            {
+                Console.WriteLine("Running iteration " + (iter + 1).ToString() + " of " + iterations.ToString() + "...");
+
+                for (int i = stepStartIdx; i <= stepEndIdx; i++)
+                {
+                    Console.Write(" " + i.ToString());
+                    double theta = -i * step;
+                    WriteMatrixIntoLattice(S2(theta) * R(theta) * T1 * R1 * S1 * seedPoints);
+                }
+                Console.WriteLine();
+                if (iter < iterations - 1)
+                {
+                    seedPoints = LatticeToMatrix(); // new seed points for the next iteration
+                }
+            }
+            sw.Stop();
+            Console.WriteLine("Time: " + sw.ElapsedMilliseconds + " ms");
+
             ExportLatticeToMesh();
         }
 
@@ -296,7 +343,7 @@ namespace Romanesco
                 }
             }
 
-            double[,] array = new double[nOccupied, 3];
+            double[,] array = new double[4, nOccupied];
             int index = 0;
             for (int xIdx = 0; xIdx < nX; xIdx++)
             {
@@ -309,9 +356,10 @@ namespace Romanesco
                             latticePoints[xIdx, yIdx, zIdx, 1] != 0 ||
                             latticePoints[xIdx, yIdx, zIdx, 2] != 0)
                         {
-                            array[index, 0] = latticePoints[xIdx, yIdx, zIdx, 0];
-                            array[index, 1] = latticePoints[xIdx, yIdx, zIdx, 1];
-                            array[index, 2] = latticePoints[xIdx, yIdx, zIdx, 2];
+                            array[0, index] = latticePoints[xIdx, yIdx, zIdx, 0];
+                            array[1, index] = latticePoints[xIdx, yIdx, zIdx, 1];
+                            array[2, index] = latticePoints[xIdx, yIdx, zIdx, 2];
+                            array[3, index] = 1.0;
                             index++;
                         }
                     }
@@ -323,12 +371,12 @@ namespace Romanesco
 
         static void WriteMatrixIntoLattice(Matrix<double> matrix)
         {
-            for (int index = 0; index < matrix.RowCount; index++)
+            for (int index = 0; index < matrix.ColumnCount; index++)
             {
                 // Reversing the logic used to generate the centers
-                double x = matrix[index, 0];
-                double y = matrix[index, 1];
-                double z = matrix[index, 2];
+                double x = matrix[0, index];
+                double y = matrix[1, index];
+                double z = matrix[2, index];
                 x -= offsetX;
                 y -= offsetY;
                 z -= offsetZ;
@@ -376,9 +424,9 @@ namespace Romanesco
                     latticePoints[xIdx, yIdx, zIdx, 1] == 0 &&
                     latticePoints[xIdx, yIdx, zIdx, 2] == 0) // current lattice cell is unoccupied
                 {
-                    latticePoints[xIdx, yIdx, zIdx, 0] = matrix[index, 0];
-                    latticePoints[xIdx, yIdx, zIdx, 1] = matrix[index, 1];
-                    latticePoints[xIdx, yIdx, zIdx, 2] = matrix[index, 2];
+                    latticePoints[xIdx, yIdx, zIdx, 0] = matrix[0, index];
+                    latticePoints[xIdx, yIdx, zIdx, 1] = matrix[1, index];
+                    latticePoints[xIdx, yIdx, zIdx, 2] = matrix[2, index];
                 }
             }
         }
@@ -390,17 +438,26 @@ namespace Romanesco
         /// <returns>Scaling matrix</returns>
         static Matrix<double> S2(double theta)
         {
-            return Matrix<double>.Build.Dense(3, 3, (i, j) => i == j ? C * Math.Exp(B * theta) : 0.0);
+            // 
+            return Matrix<double>.Build.DenseOfArray(new double[,] {
+                { Math.Exp(B * theta),                    0,                   0, 0 },
+                {                   0,  Math.Exp(B * theta),                   0, 0 },
+                {                   0,                    0, Math.Exp(B * theta), 0 },
+                {                   0,                    0,                   0, 1 } });
         }
 
         /// <summary>
-        /// Matrix that rotates about ...
+        /// Matrix that rotates counterclockwise by theta about the z-axis
         /// </summary>
         /// <param name="theta">Angle</param>
         /// <returns>Scaling matrix</returns>
         static Matrix<double> R(double theta)
         {
-            return Matrix<double>.Build.Dense(3, 3, (i, j) => i == j ? C * Math.Exp(B * theta) : 0.0);  // todo: put in correct forumula
+            return Matrix<double>.Build.DenseOfArray(new double[,] {
+                { Math.Cos(theta), -Math.Sin(theta), 0, 0 },
+                { Math.Sin(theta),  Math.Cos(theta), 0, 0 },
+                {               0,                0, 1, 0 },
+                {               0,                0, 0, 1 } });
         }
 
         /// <summary>
